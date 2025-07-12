@@ -28,11 +28,17 @@ def index():
 def login():
     return auth.login()
 
+@app.route("/students/login", methods=["POST"])
+def login_student():
+    return auth.login_students()
+
 @app.route("/auth/change-user-password/<user_id>", methods=["PUT"])
 @jwt_required()
 @has_role(["Superadmin"])
 def reset_password(user_id):
     return auth.reset_password(user_id)
+
+
 
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=8080)

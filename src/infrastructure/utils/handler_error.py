@@ -19,7 +19,7 @@ def handle_client_error(e, origen, status_code):
     )
 
 
-def handle_general_error(e, origen):
+def handle_general_error(e, origen, status_code=500):
     print(traceback.format_exc())
 
     log_repository.create_log(

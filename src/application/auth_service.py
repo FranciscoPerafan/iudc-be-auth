@@ -12,6 +12,7 @@ from marshmallow import ValidationError
 from flask_jwt_extended import create_access_token
 
 from src.infrastructure.repositories.mongodb.log_repository import LogRepository
+from src.infrastructure.repositories.mongodb.student_repository import StudentRepository
 from src.infrastructure.repositories.mongodb.user_repository import UserRepository
 from src.domain.auth_schema import (
     LoginSchema,
@@ -29,6 +30,7 @@ app = Flask(__name__)
 bcrypt = Bcrypt(app)
 log_repository = LogRepository()
 user_repository = UserRepository()
+student_repository = StudentRepository()
 
 class Auth:
     def __init__(self, app):
@@ -105,6 +107,56 @@ class Auth:
             }
             return json.loads(json_util.dumps(response)), 200
 
+        except ValidationError as e:
+            return json.loads(json_util.dumps({
+                "message": "Datos inválidos",
+                "errors": e.messages
+            })), 400
+
+        except ValueError as e:
+            return json.loads(json_util.dumps({
+                "message": str(e)
+            })), 400
+
+        except Exception as e:
+            return handle_general_error(e, origen)
+    
+    def login_students(self):
+        origen = "Login"
+        try:
+            data = request.get_json()
+            schema = LoginSchema()
+            schema.load(data)
+            
+            user = student_repository.get(email=data.get("email", ""))
+            
+            if not user:
+                return handle_client_error("Usuario no encontrado", origen, 404)
+
+            if user.get("is_active") != True:
+                return handle_client_error("Acceso denegado: usuario inactivo", origen, 403)
+            
+            if not bcrypt.check_password_hash(user.get("password"), data.get("password", None)):
+                return handle_client_error("Contraseña incorrecta", origen, 401)
+            
+            additional_claims = {"roles": user.get("roles")}
+
+            token = create_access_token(
+                identity=user.get("email"),
+                additional_claims=additional_claims,
+                expires_delta=datetime.timedelta(hours=2)
+            )
+            
+            user.pop("password", None)
+
+            log_repository.create_log(origen, "Exitoso", 200, user_id=user.get("_id"))
+
+            response = {
+                "data": {"token": token, "user": user},
+                "message": "Successfully logged in"
+            }
+            return json.loads(json_util.dumps(response)), 200
+        
         except ValidationError as e:
             return json.loads(json_util.dumps({
                 "message": "Datos inválidos",
